@@ -5,17 +5,20 @@ import plotly.graph_objects as go
 from datetime import datetime
 import random
 
-st.set_page_config(page_title="Binary Signals PRO", layout="wide")
+st.set_page_config(
+    page_title="Binary Signals PRO",
+    layout="wide"
+)
 
 st.title("📊 Binary Signals PRO")
 
-# Atualiza sozinho
+# Atualização automática
 st.markdown("""
 <meta http-equiv="refresh" content="5">
 """, unsafe_allow_html=True)
 
 # =========================
-# GERAR MERCADO SIMULADO
+# MERCADO SIMULADO
 # =========================
 def get_candles():
 
@@ -36,8 +39,16 @@ def get_candles():
     })
 
     df["open"] = df["close"]
-    df["high"] = df["close"] + 100
-    df["low"] = df["close"] - 100
+
+    df["high"] = (
+        df["close"] +
+        random.uniform(20, 100)
+    )
+
+    df["low"] = (
+        df["close"] -
+        random.uniform(20, 100)
+    )
 
     return df
 
@@ -53,9 +64,10 @@ def ema(data, period):
 
     for price in data:
 
-        result = alpha * price + (
-            1 - alpha
-        ) * result
+        result = (
+            alpha * price
+            + (1 - alpha) * result
+        )
 
     return result
 
@@ -66,14 +78,19 @@ def ema(data, period):
 def rsi(data):
 
     gains = []
+
     losses = []
 
     for i in range(1, len(data)):
 
-        diff = data[i] - data[i - 1]
+        diff = (
+            data[i]
+            - data[i - 1]
+        )
 
         if diff > 0:
             gains.append(diff)
+
         else:
             losses.append(abs(diff))
 
@@ -104,24 +121,38 @@ df = get_candles()
 
 closes = df["close"]
 
-ema9 = ema(closes[-9:], 9)
-ema21 = ema(closes[-21:], 21)
+ema9 = ema(
+    closes[-9:],
+    9
+)
 
-rsi_val = rsi(closes.values)
+ema21 = ema(
+    closes[-21:],
+    21
+)
 
-signal = "NONE"
-
-if ema9 > ema21 and rsi_val > 55:
-    signal = "CALL"
-
-elif ema9 < ema21 and rsi_val < 45:
-    signal = "PUT"
+rsi_val = rsi(
+    closes.values
+)
 
 trend_strength = abs(
     ema9 - ema21
 )
 
-# métricas
+# =========================
+# SINAIS
+# =========================
+signal = "⏳ AGUARDANDO"
+
+if ema9 > ema21:
+    signal = "📈 CALL"
+
+elif ema9 < ema21:
+    signal = "📉 PUT"
+
+# =========================
+# MÉTRICAS
+# =========================
 col1, col2, col3 = st.columns(3)
 
 col1.metric(
@@ -139,7 +170,9 @@ col3.metric(
     signal
 )
 
-# gráfico
+# =========================
+# GRÁFICO
+# =========================
 fig = go.Figure()
 
 fig.add_trace(
