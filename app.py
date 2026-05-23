@@ -18,16 +18,15 @@ st.markdown(
 )
 
 # ==========================
-# PEGAR PREÇO BTC
+# PEGAR PREÇOS BTC (Yahoo Finance)
 # ==========================
 def get_candles():
 
-    url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD"
 
     params = {
-        "vs_currency": "usd",
-        "days": 1,
-        "interval": "minutely"
+        "interval": "1m",
+        "range": "1d"
     }
 
     try:
@@ -39,24 +38,21 @@ def get_candles():
 
         data = response.json()
 
-        prices = data["prices"][-60:]
+        result = data["chart"]["result"][0]
 
-        rows = []
+        closes = result["indicators"]["quote"][0]["close"]
 
-        for item in prices:
+        closes = [x for x in closes if x is not None]
 
-            price = float(item[1])
+        df = pd.DataFrame({
+            "close": closes
+        })
 
-            rows.append({
-                "open": price,
-                "high": price,
-                "low": price,
-                "close": price
-            })
+        df["open"] = df["close"]
+        df["high"] = df["close"]
+        df["low"] = df["close"]
 
-        df = pd.DataFrame(rows)
-
-        return df
+        return df.tail(60)
 
     except Exception as e:
         st.error(f"Erro API: {e}")
@@ -110,15 +106,13 @@ def rsi(data):
 # ==========================
 df = get_candles()
 
-if df is not None:
+if df is not None and len(df) > 21:
 
     closes = df["close"]
 
     ema9 = ema(closes[-9:], 9)
     ema21 = ema(closes[-21:], 21)
     rsi_val = rsi(closes.values)
-
-    trend_strength = abs(ema9 - ema21)
 
     signal = "NONE"
 
@@ -127,6 +121,8 @@ if df is not None:
 
     elif ema9 < ema21 and rsi_val < 45:
         signal = "PUT"
+
+    trend_strength = abs(ema9 - ema21)
 
     win_points = []
     loss_points = []
@@ -183,7 +179,7 @@ if df is not None:
         x=win_points,
         y=[closes.iloc[i] for i in win_points],
         mode="markers",
-        marker=dict(color="green", size=10),
+        marker=dict(size=10),
         name="WIN"
     ))
 
@@ -191,7 +187,7 @@ if df is not None:
         x=loss_points,
         y=[closes.iloc[i] for i in loss_points],
         mode="markers",
-        marker=dict(color="red", size=10),
+        marker=dict(size=10),
         name="LOSS"
     ))
 
