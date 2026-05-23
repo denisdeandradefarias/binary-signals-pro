@@ -1,9 +1,9 @@
 import streamlit as st
+import requests
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
-import random
 import time
 
 # =========================
@@ -14,85 +14,53 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS estilo IQ Option
-st.markdown("""
-<style>
-
-.stApp{
-    background-color:#111827;
-    color:white;
-}
-
-div[data-testid="metric-container"]{
-    background:#1F2937;
-    border-radius:15px;
-    padding:15px;
-    border:1px solid #2D3748;
-}
-
-h1{
-    color:white !important;
-    text-align:center;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-st.title("📈 Binary Signals PRO")
+st.title("📊 Binary Signals PRO - BTC M1 REAL")
 
 placeholder = st.empty()
 
+# =========================
+# PREÇO REAL BTC (COINBASE)
+# =========================
+def get_price():
+
+    url = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+
+    r = requests.get(url, timeout=5)
+    data = r.json()
+
+    return float(data["data"]["amount"])
+
 
 # =========================
-# MERCADO SIMULADO
+# INICIALIZA VELAS
 # =========================
-def get_candles():
+if "candles" not in st.session_state:
 
-    base_price = 105000
+    price = get_price()
 
-    candles = []
+    st.session_state.candles = []
 
-    current_price = base_price
+    for _ in range(20):
 
-    for _ in range(60):
-
-        open_price = current_price
-
-        move = random.uniform(
-            -500,
-            500
-        )
-
-        close_price = (
-            open_price + move
-        )
-
-        high_price = max(
-            open_price,
-            close_price
-        ) + random.uniform(
-            50,
-            200
-        )
-
-        low_price = min(
-            open_price,
-            close_price
-        ) - random.uniform(
-            50,
-            200
-        )
-
-        candles.append({
-            "open": open_price,
-            "high": high_price,
-            "low": low_price,
-            "close": close_price
+        st.session_state.candles.append({
+            "open": price,
+            "high": price,
+            "low": price,
+            "close": price
         })
 
-        current_price = close_price
 
-    return pd.DataFrame(candles)
+if "current_candle" not in st.session_state:
+
+    price = get_price()
+
+    st.session_state.current_candle = {
+        "open": price,
+        "high": price,
+        "low": price,
+        "close": price,
+        "start_time": time.time()
+    }
 
 
 # =========================
@@ -100,20 +68,13 @@ def get_candles():
 # =========================
 def ema(data, period):
 
-    alpha = (
-        2 /
-        (period + 1)
-    )
+    alpha = 2 / (period + 1)
 
-    result = data.iloc[0]
+    result = data[0]
 
     for price in data:
 
-        result = (
-            alpha * price
-            + (1 - alpha)
-            * result
-        )
+        result = alpha * price + (1 - alpha) * result
 
     return result
 
@@ -126,47 +87,24 @@ def rsi(data):
     gains = []
     losses = []
 
-    for i in range(
-        1,
-        len(data)
-    ):
+    for i in range(1, len(data)):
 
-        diff = (
-            data[i]
-            - data[i - 1]
-        )
+        diff = data[i] - data[i - 1]
 
         if diff > 0:
             gains.append(diff)
-
         else:
             losses.append(abs(diff))
 
-    avg_gain = (
-        np.mean(gains)
-        if gains else 0
-    )
-
-    avg_loss = (
-        np.mean(losses)
-        if losses else 0
-    )
+    avg_gain = np.mean(gains) if gains else 0
+    avg_loss = np.mean(losses) if losses else 0
 
     if avg_loss == 0:
         return 100
 
-    rs = (
-        avg_gain /
-        avg_loss
-    )
+    rs = avg_gain / avg_loss
 
-    return (
-        100
-        - (
-            100 /
-            (1 + rs)
-        )
-    )
+    return 100 - (100 / (1 + rs))
 
 
 # =========================
@@ -174,144 +112,99 @@ def rsi(data):
 # =========================
 while True:
 
-    df = get_candles()
+    price = get_price()
 
-    closes = df["close"]
+    candle = st.session_state.current_candle
 
-    ema9 = ema(
-        closes[-9:],
-        9
-    )
+    # atualizar candle atual
+    candle["close"] = price
+    candle["high"] = max(candle["high"], price)
+    candle["low"] = min(candle["low"], price)
 
-    ema21 = ema(
-        closes[-21:],
-        21
-    )
+    # se passou 60s, fecha vela
+    if time.time() - candle["start_time"] >= 60:
 
-    rsi_val = rsi(
-        closes.values
-    )
+        st.session_state.candles.append({
+            "open": candle["open"],
+            "high": candle["high"],
+            "low": candle["low"],
+            "close": candle["close"]
+        })
 
-    signal = "⏳ AGUARDANDO"
+        st.session_state.candles = st.session_state.candles[-20:]
 
-    signal_color = "#FACC15"
+        st.session_state.current_candle = {
+            "open": price,
+            "high": price,
+            "low": price,
+            "close": price,
+            "start_time": time.time()
+        }
 
+    # dataframe final
+    df = pd.DataFrame(st.session_state.candles + [candle])
+
+    closes = df["close"].values
+
+    ema9 = ema(closes[-9:], 9)
+    ema21 = ema(closes[-21:], 21)
+
+    rsi_val = rsi(closes)
+
+    # sinal
     if ema9 > ema21:
         signal = "📈 CALL"
-        signal_color = "#22C55E"
-
-    elif ema9 < ema21:
+        color = "#22C55E"
+    else:
         signal = "📉 PUT"
-        signal_color = "#EF4444"
+        color = "#EF4444"
 
     with placeholder.container():
 
         col1, col2, col3 = st.columns(3)
 
-        col1.metric(
-            "RSI",
-            f"{rsi_val:.2f}"
-        )
+        col1.metric("Preço BTC", f"${price:,.2f}")
+        col2.metric("RSI", f"{rsi_val:.2f}")
+        col3.metric("Sinal", signal)
 
-        col2.metric(
-            "EMA 9/21",
-            f"{abs(ema9-ema21):.2f}"
-        )
-
-        st.markdown(
-            f"""
-            <div style="
-                background:{signal_color};
-                padding:20px;
-                border-radius:20px;
-                text-align:center;
-                font-size:38px;
-                font-weight:bold;
-                color:white;
-                margin-top:10px;
-                margin-bottom:20px;
-            ">
-            {signal}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        st.markdown(f"""
+        <div style="
+            background:{color};
+            padding:20px;
+            border-radius:15px;
+            text-align:center;
+            font-size:40px;
+            font-weight:bold;
+            color:white;
+            margin-bottom:15px;
+        ">
+        {signal}
+        </div>
+        """, unsafe_allow_html=True)
 
         fig = go.Figure()
 
-        fig.add_trace(
-            go.Candlestick(
-                x=df.index,
-                open=df["open"],
-                high=df["high"],
-                low=df["low"],
-                close=df["close"],
-
-                increasing=dict(
-                    line=dict(
-                        color="#22C55E",
-                        width=2
-                    ),
-                    fillcolor="#22C55E"
-                ),
-
-                decreasing=dict(
-                    line=dict(
-                        color="#EF4444",
-                        width=2
-                    ),
-                    fillcolor="#EF4444"
-                )
-            )
-        )
+        fig.add_trace(go.Candlestick(
+            x=df.index,
+            open=df["open"],
+            high=df["high"],
+            low=df["low"],
+            close=df["close"]
+        ))
 
         fig.update_layout(
             height=700,
-
+            xaxis_rangeslider_visible=False,
             paper_bgcolor="#111827",
             plot_bgcolor="#111827",
-
-            font=dict(
-                color="white"
-            ),
-
-            margin=dict(
-                l=10,
-                r=10,
-                t=10,
-                b=10
-            ),
-
-            xaxis_rangeslider_visible=False,
-
-            xaxis=dict(
-                showgrid=True,
-                gridcolor="#1F2937"
-            ),
-
-            yaxis=dict(
-                side="right",
-                showgrid=True,
-                gridcolor="#1F2937"
-            )
+            font=dict(color="white")
         )
 
-        # Mostrar só 20 velas
-        fig.update_xaxes(
-            range=[
-                len(df)-20,
-                len(df)
-            ]
-        )
+        # 20 velas estilo IQ
+        fig.update_xaxes(range=[len(df)-20, len(df)])
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
+        st.plotly_chart(fig, use_container_width=True)
 
-        st.caption(
-            f"Atualizado: "
-            f"{datetime.now().strftime('%H:%M:%S')}"
-        )
+        st.caption(f"Atualizado: {datetime.now().strftime('%H:%M:%S')}")
 
-    time.sleep(5)
+    time.sleep(2)
