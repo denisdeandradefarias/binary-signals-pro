@@ -9,7 +9,7 @@ st.set_page_config(page_title="Binary Signals PRO", layout="wide")
 
 st.title("📊 Binary Signals PRO - Backtest Visual")
 
-# Atualização automática a cada 5 segundos
+# Atualização automática
 st.markdown(
     """
     <meta http-equiv="refresh" content="5">
@@ -18,43 +18,48 @@ st.markdown(
 )
 
 # ==========================
-# PEGAR CANDLES BINANCE
+# PEGAR PREÇO BTC
 # ==========================
 def get_candles():
 
-    url = "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=60"
+    url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
+    params = {
+        "vs_currency": "usd",
+        "days": 1,
+        "interval": "minutely"
     }
 
     try:
         response = requests.get(
             url,
-            headers=headers,
+            params=params,
             timeout=10
         )
 
-        if response.status_code != 200:
-            st.error(f"Erro Binance: {response.status_code}")
-            return None
-
         data = response.json()
 
-        df = pd.DataFrame(data, columns=[
-            "time", "open", "high", "low", "close", "volume",
-            "c1", "c2", "c3", "c4", "c5", "c6"
-        ])
+        prices = data["prices"][-60:]
 
-        df["open"] = df["open"].astype(float)
-        df["high"] = df["high"].astype(float)
-        df["low"] = df["low"].astype(float)
-        df["close"] = df["close"].astype(float)
+        rows = []
+
+        for item in prices:
+
+            price = float(item[1])
+
+            rows.append({
+                "open": price,
+                "high": price,
+                "low": price,
+                "close": price
+            })
+
+        df = pd.DataFrame(rows)
 
         return df
 
     except Exception as e:
-        st.error(f"Erro ao conectar com Binance API: {e}")
+        st.error(f"Erro API: {e}")
         return None
 
 
@@ -117,17 +122,12 @@ if df is not None:
 
     signal = "NONE"
 
-    if trend_strength > 20:
+    if ema9 > ema21 and rsi_val > 55:
+        signal = "CALL"
 
-        if ema9 > ema21 and rsi_val > 55:
-            signal = "CALL"
+    elif ema9 < ema21 and rsi_val < 45:
+        signal = "PUT"
 
-        elif ema9 < ema21 and rsi_val < 45:
-            signal = "PUT"
-
-    # ==========================
-    # BACKTEST
-    # ==========================
     win_points = []
     loss_points = []
 
@@ -163,9 +163,6 @@ if df is not None:
         if total_ops > 0 else 0
     )
 
-    # ==========================
-    # MÉTRICAS
-    # ==========================
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric("RSI", f"{rsi_val:.2f}")
@@ -173,21 +170,15 @@ if df is not None:
     col3.metric("Sinal", signal)
     col4.metric("Winrate", f"{winrate:.1f}%")
 
-    # ==========================
-    # GRÁFICO
-    # ==========================
     fig = go.Figure()
 
-    fig.add_trace(go.Candlestick(
+    fig.add_trace(go.Scatter(
         x=df.index,
-        open=df["open"],
-        high=df["high"],
-        low=df["low"],
-        close=df["close"],
-        name="BTCUSDT"
+        y=df["close"],
+        mode="lines",
+        name="BTC"
     ))
 
-    # WIN
     fig.add_trace(go.Scatter(
         x=win_points,
         y=[closes.iloc[i] for i in win_points],
@@ -196,7 +187,6 @@ if df is not None:
         name="WIN"
     ))
 
-    # LOSS
     fig.add_trace(go.Scatter(
         x=loss_points,
         y=[closes.iloc[i] for i in loss_points],
@@ -205,10 +195,7 @@ if df is not None:
         name="LOSS"
     ))
 
-    fig.update_layout(
-        height=650,
-        xaxis_rangeslider_visible=False
-    )
+    fig.update_layout(height=650)
 
     st.plotly_chart(fig, use_container_width=True)
 
