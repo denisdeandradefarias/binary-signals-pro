@@ -6,12 +6,39 @@ from datetime import datetime
 import random
 import time
 
+# =========================
+# CONFIG
+# =========================
 st.set_page_config(
     page_title="Binary Signals PRO",
     layout="wide"
 )
 
-st.title("📊 Binary Signals PRO")
+# CSS estilo IQ Option
+st.markdown("""
+<style>
+
+.stApp{
+    background-color:#111827;
+    color:white;
+}
+
+div[data-testid="metric-container"]{
+    background:#1F2937;
+    border-radius:15px;
+    padding:15px;
+    border:1px solid #2D3748;
+}
+
+h1{
+    color:white !important;
+    text-align:center;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+st.title("📈 Binary Signals PRO")
 
 placeholder = st.empty()
 
@@ -23,60 +50,49 @@ def get_candles():
 
     base_price = 105000
 
-    prices = [base_price]
+    candles = []
 
-    # movimento mais forte
-    for _ in range(59):
+    current_price = base_price
 
-        move = random.uniform(-600, 600)
+    for _ in range(60):
 
-        new_price = (
-            prices[-1] + move
+        open_price = current_price
+
+        move = random.uniform(
+            -500,
+            500
         )
 
-        prices.append(
-            new_price
+        close_price = (
+            open_price + move
         )
 
-    df = pd.DataFrame({
-        "close": prices
-    })
+        high_price = max(
+            open_price,
+            close_price
+        ) + random.uniform(
+            50,
+            200
+        )
 
-    # corpo maior
-    body_size = np.random.uniform(
-        80, 250, len(df)
-    )
+        low_price = min(
+            open_price,
+            close_price
+        ) - random.uniform(
+            50,
+            200
+        )
 
-    direction = np.random.choice(
-        [-1, 1],
-        len(df)
-    )
+        candles.append({
+            "open": open_price,
+            "high": high_price,
+            "low": low_price,
+            "close": close_price
+        })
 
-    df["open"] = (
-        df["close"]
-        + (body_size * direction)
-    )
+        current_price = close_price
 
-    # pavios maiores
-    wick_top = np.random.uniform(
-        80, 180, len(df)
-    )
-
-    wick_bottom = np.random.uniform(
-        80, 180, len(df)
-    )
-
-    df["high"] = np.maximum(
-        df["open"],
-        df["close"]
-    ) + wick_top
-
-    df["low"] = np.minimum(
-        df["open"],
-        df["close"]
-    ) - wick_bottom
-
-    return df
+    return pd.DataFrame(candles)
 
 
 # =========================
@@ -85,7 +101,8 @@ def get_candles():
 def ema(data, period):
 
     alpha = (
-        2 / (period + 1)
+        2 /
+        (period + 1)
     )
 
     result = data.iloc[0]
@@ -145,12 +162,15 @@ def rsi(data):
 
     return (
         100
-        - (100 / (1 + rs))
+        - (
+            100 /
+            (1 + rs)
+        )
     )
 
 
 # =========================
-# LOOP SEM PISCAR
+# LOOP
 # =========================
 while True:
 
@@ -172,17 +192,17 @@ while True:
         closes.values
     )
 
-    trend_strength = abs(
-        ema9 - ema21
-    )
-
     signal = "⏳ AGUARDANDO"
+
+    signal_color = "#FACC15"
 
     if ema9 > ema21:
         signal = "📈 CALL"
+        signal_color = "#22C55E"
 
     elif ema9 < ema21:
         signal = "📉 PUT"
+        signal_color = "#EF4444"
 
     with placeholder.container():
 
@@ -194,13 +214,27 @@ while True:
         )
 
         col2.metric(
-            "EMA Spread",
-            f"{trend_strength:.2f}"
+            "EMA 9/21",
+            f"{abs(ema9-ema21):.2f}"
         )
 
-        col3.metric(
-            "Sinal",
-            signal
+        st.markdown(
+            f"""
+            <div style="
+                background:{signal_color};
+                padding:20px;
+                border-radius:20px;
+                text-align:center;
+                font-size:38px;
+                font-weight:bold;
+                color:white;
+                margin-top:10px;
+                margin-bottom:20px;
+            ">
+            {signal}
+            </div>
+            """,
+            unsafe_allow_html=True
         )
 
         fig = go.Figure()
@@ -212,20 +246,60 @@ while True:
                 high=df["high"],
                 low=df["low"],
                 close=df["close"],
-                name="BTC"
+
+                increasing=dict(
+                    line=dict(
+                        color="#22C55E",
+                        width=2
+                    ),
+                    fillcolor="#22C55E"
+                ),
+
+                decreasing=dict(
+                    line=dict(
+                        color="#EF4444",
+                        width=2
+                    ),
+                    fillcolor="#EF4444"
+                )
             )
         )
 
         fig.update_layout(
             height=700,
-            bargap=0.01,
-            xaxis_rangeslider_visible=False
+
+            paper_bgcolor="#111827",
+            plot_bgcolor="#111827",
+
+            font=dict(
+                color="white"
+            ),
+
+            margin=dict(
+                l=10,
+                r=10,
+                t=10,
+                b=10
+            ),
+
+            xaxis_rangeslider_visible=False,
+
+            xaxis=dict(
+                showgrid=True,
+                gridcolor="#1F2937"
+            ),
+
+            yaxis=dict(
+                side="right",
+                showgrid=True,
+                gridcolor="#1F2937"
+            )
         )
 
-        # mostrar só 20 velas
+        # Mostrar só 20 velas
         fig.update_xaxes(
             range=[
-                len(df) - 20,
+                len(df)-20,
                 len(df)
             ]
         )
@@ -236,7 +310,7 @@ while True:
         )
 
         st.caption(
-            f"Última atualização: "
+            f"Atualizado: "
             f"{datetime.now().strftime('%H:%M:%S')}"
         )
 
