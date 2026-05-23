@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import random
+import time
 
 st.set_page_config(
     page_title="Binary Signals PRO",
@@ -12,10 +13,8 @@ st.set_page_config(
 
 st.title("📊 Binary Signals PRO")
 
-# Atualização automática
-st.markdown("""
-<meta http-equiv="refresh" content="5">
-""", unsafe_allow_html=True)
+placeholder = st.empty()
+
 
 # =========================
 # MERCADO SIMULADO
@@ -38,17 +37,21 @@ def get_candles():
         "close": prices
     })
 
-    df["open"] = df["close"]
-
-    df["high"] = (
-        df["close"] +
-        random.uniform(20, 100)
+    # candles mais bonitos
+    df["open"] = (
+        df["close"]
+        + np.random.uniform(-50, 50, len(df))
     )
 
-    df["low"] = (
-        df["close"] -
-        random.uniform(20, 100)
-    )
+    df["high"] = np.maximum(
+        df["open"],
+        df["close"]
+    ) + np.random.uniform(10, 70, len(df))
+
+    df["low"] = np.minimum(
+        df["open"],
+        df["close"]
+    ) - np.random.uniform(10, 70, len(df))
 
     return df
 
@@ -78,7 +81,6 @@ def ema(data, period):
 def rsi(data):
 
     gains = []
-
     losses = []
 
     for i in range(1, len(data)):
@@ -115,88 +117,94 @@ def rsi(data):
 
 
 # =========================
-# EXECUÇÃO
+# LOOP SEM PISCAR
 # =========================
-df = get_candles()
+while True:
 
-closes = df["close"]
+    df = get_candles()
 
-ema9 = ema(
-    closes[-9:],
-    9
-)
+    closes = df["close"]
 
-ema21 = ema(
-    closes[-21:],
-    21
-)
-
-rsi_val = rsi(
-    closes.values
-)
-
-trend_strength = abs(
-    ema9 - ema21
-)
-
-# =========================
-# SINAIS
-# =========================
-signal = "⏳ AGUARDANDO"
-
-if ema9 > ema21:
-    signal = "📈 CALL"
-
-elif ema9 < ema21:
-    signal = "📉 PUT"
-
-# =========================
-# MÉTRICAS
-# =========================
-col1, col2, col3 = st.columns(3)
-
-col1.metric(
-    "RSI",
-    f"{rsi_val:.2f}"
-)
-
-col2.metric(
-    "EMA Spread",
-    f"{trend_strength:.2f}"
-)
-
-col3.metric(
-    "Sinal",
-    signal
-)
-
-# =========================
-# GRÁFICO
-# =========================
-fig = go.Figure()
-
-fig.add_trace(
-    go.Candlestick(
-        x=df.index,
-        open=df["open"],
-        high=df["high"],
-        low=df["low"],
-        close=df["close"],
-        name="BTC"
+    ema9 = ema(
+        closes[-9:],
+        9
     )
-)
 
-fig.update_layout(
-    height=650,
-    xaxis_rangeslider_visible=False
-)
+    ema21 = ema(
+        closes[-21:],
+        21
+    )
 
-st.plotly_chart(
-    fig,
-    use_container_width=True
-)
+    rsi_val = rsi(
+        closes.values
+    )
 
-st.caption(
-    f"Última atualização: "
-    f"{datetime.now().strftime('%H:%M:%S')}"
-)
+    trend_strength = abs(
+        ema9 - ema21
+    )
+
+    signal = "⏳ AGUARDANDO"
+
+    if ema9 > ema21:
+        signal = "📈 CALL"
+
+    elif ema9 < ema21:
+        signal = "📉 PUT"
+
+    with placeholder.container():
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric(
+            "RSI",
+            f"{rsi_val:.2f}"
+        )
+
+        col2.metric(
+            "EMA Spread",
+            f"{trend_strength:.2f}"
+        )
+
+        col3.metric(
+            "Sinal",
+            signal
+        )
+
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Candlestick(
+                x=df.index,
+                open=df["open"],
+                high=df["high"],
+                low=df["low"],
+                close=df["close"],
+                name="BTC"
+            )
+        )
+
+        fig.update_layout(
+            height=650,
+            xaxis_rangeslider_visible=False,
+            bargap=0.02
+        )
+
+        # mostrar apenas 20 velas
+        fig.update_xaxes(
+            range=[
+                len(df) - 20,
+                len(df)
+            ]
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+        st.caption(
+            f"Última atualização: "
+            f"{datetime.now().strftime('%H:%M:%S')}"
+        )
+
+    time.sleep(5)
