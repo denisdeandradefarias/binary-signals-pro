@@ -25,33 +25,56 @@ def get_candles():
 
     prices = [base_price]
 
+    # movimento mais forte
     for _ in range(59):
 
-        move = random.uniform(-300, 300)
+        move = random.uniform(-600, 600)
 
-        new_price = prices[-1] + move
+        new_price = (
+            prices[-1] + move
+        )
 
-        prices.append(new_price)
+        prices.append(
+            new_price
+        )
 
     df = pd.DataFrame({
         "close": prices
     })
 
-    # candles mais bonitos
+    # corpo maior
+    body_size = np.random.uniform(
+        80, 250, len(df)
+    )
+
+    direction = np.random.choice(
+        [-1, 1],
+        len(df)
+    )
+
     df["open"] = (
         df["close"]
-        + np.random.uniform(-50, 50, len(df))
+        + (body_size * direction)
+    )
+
+    # pavios maiores
+    wick_top = np.random.uniform(
+        80, 180, len(df)
+    )
+
+    wick_bottom = np.random.uniform(
+        80, 180, len(df)
     )
 
     df["high"] = np.maximum(
         df["open"],
         df["close"]
-    ) + np.random.uniform(10, 70, len(df))
+    ) + wick_top
 
     df["low"] = np.minimum(
         df["open"],
         df["close"]
-    ) - np.random.uniform(10, 70, len(df))
+    ) - wick_bottom
 
     return df
 
@@ -61,7 +84,9 @@ def get_candles():
 # =========================
 def ema(data, period):
 
-    alpha = 2 / (period + 1)
+    alpha = (
+        2 / (period + 1)
+    )
 
     result = data.iloc[0]
 
@@ -69,7 +94,8 @@ def ema(data, period):
 
         result = (
             alpha * price
-            + (1 - alpha) * result
+            + (1 - alpha)
+            * result
         )
 
     return result
@@ -83,7 +109,10 @@ def rsi(data):
     gains = []
     losses = []
 
-    for i in range(1, len(data)):
+    for i in range(
+        1,
+        len(data)
+    ):
 
         diff = (
             data[i]
@@ -109,10 +138,14 @@ def rsi(data):
     if avg_loss == 0:
         return 100
 
-    rs = avg_gain / avg_loss
+    rs = (
+        avg_gain /
+        avg_loss
+    )
 
-    return 100 - (
-        100 / (1 + rs)
+    return (
+        100
+        - (100 / (1 + rs))
     )
 
 
@@ -184,12 +217,12 @@ while True:
         )
 
         fig.update_layout(
-            height=650,
-            xaxis_rangeslider_visible=False,
-            bargap=0.02
+            height=700,
+            bargap=0.01,
+            xaxis_rangeslider_visible=False
         )
 
-        # mostrar apenas 20 velas
+        # mostrar só 20 velas
         fig.update_xaxes(
             range=[
                 len(df) - 20,
